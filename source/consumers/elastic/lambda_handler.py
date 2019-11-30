@@ -197,21 +197,24 @@ def process_face_search(asset, workflow, results):
                         item["FaceLandmarks"] = item["Person"]["Face"]["Landmarks"]
                         item["FacePose"] = item["Person"]["Face"]["Pose"]
                         item["FaceQuality"] = item["Person"]["Face"]["Quality"]
-                        confidence = item["Person"]["Face"]["Confidence"]
-                        item["Confidence"] = confidence
+                        item["Confidence"] = item["Person"]["Face"]["Confidence"]
 
-                    if "FaceMatches" in item:
+                    # flatten face matches key
+                    if item["FaceMatches"]:
                         item["ContainsKnownFace"] = True
-                        # flatten face matches key
-                        for face in item["FaceMatches"]:
-                            item["KnownFaceSimilarity"] = face["Similarity"]
-                            item["MatchingKnownFaceId"] = face["Face"]["FaceId"]
-                            item["KnownFaceBoundingBox"] = face["Face"]["BoundingBox"]
-                            item["ImageId"] = face["Face"]["ImageId"]
-                        del item["FaceMatches"]
+
+                        face = item["FaceMatches"][0]  # the highest similarity comes first
+                        item["KnownFaceSimilarity"] = face["Similarity"]
+                        item["KnownFaceConfidence"] = face["Face"]["Confidence"]
+                        item["MatchingKnownFaceId"] = face["Face"]["FaceId"]
+                        item["KnownFaceBoundingBox"] = face["Face"]["BoundingBox"]
+                        item["ImageId"] = face["Face"]["ImageId"]
+                        item["ExternalImageId"] = face["Face"].get("ExternalImageId", None)
                     else:
                         item["ContainsKnownFace"] = False
+
                     del item["Person"]
+                    del item["FaceMatches"]
 
                     extracted_items.append(item)
 
@@ -224,27 +227,30 @@ def process_face_search(asset, workflow, results):
                 item["PersonIndex"] = item["Person"]["Index"]
                 if "BoundingBox" in item["Person"]:
                     item["PersonBoundingBox"] = item["Person"]["BoundingBox"]
-                #flatten face key
+                # flatten face key
                 if "Face" in item["Person"]:
                     item["FaceBoundingBox"] = item["Person"]["Face"]["BoundingBox"]
                     item["FaceLandmarks"] = item["Person"]["Face"]["Landmarks"]
                     item["FacePose"] = item["Person"]["Face"]["Pose"]
                     item["FaceQuality"] = item["Person"]["Face"]["Quality"]
-                    confidence = item["Person"]["Face"]["Confidence"]
-                    item["Confidence"] = confidence
+                    item["Confidence"] = item["Person"]["Face"]["Confidence"]
 
-                if "FaceMatches" in item:
+                # flatten face matches key
+                if item["FaceMatches"]:
                     item["ContainsKnownFace"] = True
-                    # flatten face matches key
-                    for face in item["FaceMatches"]:
-                        item["KnownFaceSimilarity"] = face["Similarity"]
-                        item["MatchingKnownFaceId"] = face["Face"]["FaceId"]
-                        item["KnownFaceBoundingBox"] = face["Face"]["BoundingBox"]
-                        item["ImageId"] = face["Face"]["ImageId"]
-                    del item["FaceMatches"]
+
+                    face = item["FaceMatches"][0]  # the highest similarity comes first
+                    item["KnownFaceSimilarity"] = face["Similarity"]
+                    item["KnownFaceConfidence"] = face["Face"]["Confidence"]
+                    item["MatchingKnownFaceId"] = face["Face"]["FaceId"]
+                    item["KnownFaceBoundingBox"] = face["Face"]["BoundingBox"]
+                    item["ImageId"] = face["Face"]["ImageId"]
+                    item["ExternalImageId"] = face["Face"].get("ExternalImageId", None)
                 else:
                     item["ContainsKnownFace"] = False
+
                 del item["Person"]
+                del item["FaceMatches"]
 
                 extracted_items.append(item)
 
@@ -350,6 +356,7 @@ def process_generic_data(asset, workflow, results):
                                     box["BoundingBox"]["Left"] = float(box["BoundingBox"]["Left"]) / 1280
                                     box["BoundingBox"]["Width"] = float(box["BoundingBox"]["Width"]) / 1280
                                     box["Confidence"] = float(box["Confidence"])*100
+
                                 item["Instances"] = item["Label"]["Instances"]
                             item["Parents"] = ''
                             if 'Parents' in item["Label"]:
@@ -362,6 +369,7 @@ def process_generic_data(asset, workflow, results):
                         print("Item: " + json.dumps(item))
     else:
         # these results are not paged
+
         if "Labels" in metadata:
             for item in metadata["Labels"]:
                 try:
@@ -389,7 +397,9 @@ def process_generic_data(asset, workflow, results):
                 except KeyError as e:
                     print("KeyError: " + str(e))
                     print("Item: " + json.dumps(item))
+
     bulk_index(es, asset, "labels", extracted_items)
+
 
 def process_label_detection(asset, workflow, results):
     # Rekognition label detection puts labels on an inner array in its JSON result, but for ease of search in Elasticsearch we need those results as a top level json array. So this function does that.
@@ -471,11 +481,13 @@ def process_transcribe(asset, workflow, results):
     for item in transcript_time:
         content = item["alternatives"][0]["content"]
         confidence = normalize_confidence(item["alternatives"][0]["confidence"])
-        if "start_time" in item and "end_time" in item:
+        try:
             start_time = convert_to_milliseconds(item["start_time"])
             end_time = convert_to_milliseconds(item["end_time"])
             item["start_time"] = start_time
             item["end_time"] = end_time
+        except KeyError:
+            print("This item has no timestamps:", item)
 
         del item["alternatives"]
 
@@ -671,6 +683,7 @@ def lambda_handler(event, context):
                             process_translate(asset_id, workflow, metadata["Results"])
                         if operator == "genericdatalookup":
                             process_generic_data(asset_id, workflow, metadata["Results"])
+
                         if operator == "labeldetection":
                             process_label_detection(asset_id, workflow, metadata["Results"])
                         if operator == "celebrityrecognition":
