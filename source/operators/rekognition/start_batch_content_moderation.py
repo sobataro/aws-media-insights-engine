@@ -60,7 +60,7 @@ def lambda_handler(event, context):
         
         # Read metadata and list of frames
         chunk_details = json.loads(s3.get_object( Bucket=s3bucket, Key=s3key, )["Body"].read())
-        chunk_result = []
+        chunk_result = {}
         chunk_s3_keys = chunk_details['s3_resized_frame_keys']
         frames = sorted(chunk_s3_keys, key=natural_keys)
         for img_s3key in frames:
@@ -73,6 +73,7 @@ def lambda_handler(event, context):
                 raise MasExecutionError(operator_object.return_output_object())
             else:
                 frame_result = []
+                frame_id, file_extension = os.path.splitext(os.path.basename(img_s3key))
                 for i in response['ModerationLabels']:
                     if len(i['ParentName']) >1:
                         # is a child node
@@ -82,9 +83,8 @@ def lambda_handler(event, context):
                                 "Left": "0.0",
                                 "Top": "0.0"
                         }
-                    frame_id, file_extension = os.path.splitext(os.path.basename(img_s3key))
-                    frame_result.append({'ModerationLabel': i, 'Timestamp': chunk_details['timestamps'][frame_id]})
-                chunk_result.append(frame_result)
+                    frame_result.append({'ModerationLabel': i})
+                chunk_result[frame_id] = frame_result
 
         response = {'metadata': chunk_details['metadata'],
                         'frames_result': chunk_result}

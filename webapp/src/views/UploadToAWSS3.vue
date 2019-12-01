@@ -102,13 +102,16 @@
             </b-card>
             <b-card header="Redaction Settings">
               <b-form-group>
+                <b-form-input v-model="redactionName" placeholder="Enter redaction name"></b-form-input>
                 <b-form-checkbox-group
                   id="checkbox-group-4"
                   v-model="enabledOperators"
                   :options="redactionTypes"
                   name="flavour-4"
                 ></b-form-checkbox-group>
-                <a :href="definitionsLink"> Content Definitions </a>
+                <br>
+                <b-form-radio v-model="boundingBoxesOnly" name="some-radios" value=true>Only blur bounding boxes</b-form-radio>
+                <b-form-radio v-model="boundingBoxesOnly" name="some-radios" value=false>Blur entire frame</b-form-radio>
               </b-form-group>
               <div v-if="redactionFormError" style="color:red">
                 {{ redactionFormError }}
@@ -144,7 +147,10 @@
     data() {
       return {
         hasAssetParam: false,
+        redactionValues: {'People': ['Person', 'Human', 'Man', 'Woman', 'People'], 'Guns': ['Gun', 'Weapon', 'Handgun', 'Call of Duty', 'Weaponry', 'Sniper', 'Soilder', 'Musical Instrument'], 'Vehicles': ['Car', 'Automobile', 'Truck', 'Airplane', 'Train', 'Motorcycle', 'Bicycle'], 'Sports': ['Golf', 'Skiing', 'Running', 'Basketball', 'Leisure Activities', 'Football', 'Soccer', 'Swimming', 'Hiking', 'Baseball', 'Sport', 'Sports', 'Team Sport', 'Ball']},
+        redactionName: '',
         assetIdParam: '',
+        boundingBoxesOnly: false,
         definitionsLink: "https://aws.amazon.com/rekognition/faqs/#Unsafe_Content_Detection",
         upload_in_progress: false,
         enabledOperators: [],
@@ -166,10 +172,10 @@
           {text: 'Translate', value: 'Translate'},
         ],
         redactionTypes: [
-          {text: 'Violence', value: 'Violence'},
-          {text: 'Nudity', value: 'Explicit Nudity'},
-          {text: 'Suggestive', value: 'Suggestive'},
-          {text: 'Visually Disturbing', value: 'Visually Disturbing'}
+          {text: 'People', value: 'People'},
+          {text: 'Weapon Violence', value: 'Guns'},
+          {text: 'Vehicles', value: 'Vehicles'},
+          {text: 'Sports', value: 'Sports'}
         ],
         faceCollectionId: "",
         genericDataFilename: "",
@@ -265,12 +271,15 @@
         return "";
       },
       redactionFormError() {
-        if ( this.enabledOperators.includes('Violence') || ( this.enabledOperators.includes('Explicit Nudity')) || ( this.enabledOperators.includes('Suggestive')) || ( this.enabledOperators.includes('Visually Disturbing')) ) {
+        if ( this.enabledOperators.includes('Guns') || ( this.enabledOperators.includes('People')) || ( this.enabledOperators.includes('Sports')) || ( this.enabledOperators.includes('Vehicles'))  ) {
           if (this.enabledOperators.includes("Transcribe") || (this.enabledOperators.includes("Translate")) || (this.enabledOperators.includes("labelDetection")) || (this.enabledOperators.includes("celebrityRecognition")) || (this.enabledOperators.includes("contentModeration")) || (this.enabledOperators.includes("faceDetection")) || (this.enabledOperators.includes("faceSearch")) || (this.enabledOperators.includes("genericDataLookup")) || (this.enabledOperators.includes("ComprehendKeyPhrases")) || (this.enabledOperators.includes("ComprehendEntities")) || (this.enabledOperators.includes("Polly"))) {
             return "Redaction workflows must be run in isolation. Disable all other analysis to perform Redaction.";
           }
           if (this.enabledOperators.length > 1) {
             return "Only one redaction type can be enabled."
+          }
+          if (this.redactionName === "") {
+            return "Redaction name must be specified"
           }
         }
         return "";
@@ -323,16 +332,23 @@
         return {
           "Name": "RedactionModerationWorkflow",
           "Configuration": {
+            "BatchLabelDetectionStage": {
+              "batchLabelDetection": {
+                "BoundingBoxesOnly": this.boundingBoxesOnly
+              }
+            },
             "FrameBlurStage": {
               "batchBlur": {
-                "DetectionFile": "batchModeration.json",
-                "DetectionId": this.enabledOperators[0],
-                "MinConfidence": "70"
+                "DetectionLabel": "Name",
+                "DetectionType": "Label",
+                "DetectionFile": "batchLabelDetection.json",
+                "DetectionId": this.redactionValues[this.enabledOperators[0]],
+                "MinConfidence": "40"
               }
             },
             "FrameStitcherStage": {
               "frameStitcher": {
-                "RedactionType": this.enabledOperators[0]
+                "RedactionType": this.redactionName
               }
             }
           }
@@ -489,7 +505,7 @@
             }
           };
         } else if (media_type == 'video/mp4') {
-          if (this.enabledOperators.includes('Violence') || this.enabledOperators.includes('Explicit Nudity') || this.enabledOperators.includes('Suggestive') || this.enabledOperators.includes('Visually Disturbing') ) {
+          if (this.enabledOperators.includes('Guns') || this.enabledOperators.includes('People') || this.enabledOperators.includes('Sports') ||  this.enabledOperators.includes('Vehicles')) {
             data = vm.redactionModerationWorkflowConfig
           }
           else {
@@ -573,7 +589,7 @@
       async runWorkflow() {
         if (this.hasAssetParam) {
           let data = null;
-          if (this.enabledOperators.includes('Violence') || this.enabledOperators.includes('Explicit Nudity') || this.enabledOperators.includes('Suggestive') || this.enabledOperators.includes('Visually Disturbing') ) {
+          if (this.enabledOperators.includes('Guns') || this.enabledOperators.includes('People') || this.enabledOperators.includes('Sports') || this.enabledOperators.includes('Vehicles')) {
             data = this.redactionModerationWorkflowConfig
           }
           else {

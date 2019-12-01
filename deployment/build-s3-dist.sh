@@ -798,6 +798,7 @@ zip -r9 start_batch_content_moderation.zip start_batch_content_moderation.py
 zip -r9 start_batch_face_search.zip start_batch_face_search.py
 zip -r9 start_batch_text_detection.zip start_batch_text_detection.py
 zip -r9 start_batch_weapon_detection.zip start_batch_weapon_detection.py
+zip -r9 start_batch_label_detection.zip start_batch_label_detection.py
 
 mv -f *.zip $dist_dir/
 

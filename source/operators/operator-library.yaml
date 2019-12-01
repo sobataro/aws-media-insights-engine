@@ -746,7 +746,31 @@ Resources:
 
 
   # Rekognition
-
+  startBatchLabelDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      MemorySize: 2048
+      Timeout: 900
+      Handler: "start_batch_label_detection.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "rekognitionRole.Arn"
+      Code:
+        S3Bucket: !FindInMap ["SourceCode", "General", "S3Bucket"]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "KeyPrefix"],
+            "start_batch_label_detection.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          DataplaneEndpoint: !Ref "DataPlaneEndpoint"
+          DATAPLANE_BUCKET: !Ref "DataPlaneBucket"
+  
   startBatchContentModeration:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -1535,6 +1559,17 @@ Resources:
       StartLambdaArn: !GetAtt startBatchContentModeration.Arn
       StateMachineExecutionRoleArn: !Ref StepFuctionRoleArn
 
+  BatchLabelDetectionOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !Ref WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "batchLabelDetection"
+      Type: "Sync"
+      Configuration: { "MediaType": "Images", "Enabled": true, "BoundingBoxesOnly": false }
+      StartLambdaArn: !GetAtt startBatchLabelDetection.Arn
+      StateMachineExecutionRoleArn: !Ref StepFuctionRoleArn
+
   BatchFaceSearchOperation:
     Type: Custom::CustomResource
     Properties:
@@ -1862,6 +1897,11 @@ Outputs:
     Value: !GetAtt BatchFaceSearchOperation.Name
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", BatchFaceSearch]]
+  BatchLabelDetectionOperation:
+    Description: "Operation name of rek batch label detection"
+    Value: !GetAtt BatchLabelDetectionOperation.Name
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", BatchLabelDetection]]
   BatchContentModerationOperation:
     Description: "Operation name of rek batch content moderation"
     Value: !GetAtt BatchContentModerationOperation.Name

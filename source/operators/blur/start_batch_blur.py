@@ -33,34 +33,24 @@ def download_image(s3bucket, s3key):
     return temp_image
 
 
-def transform(metadata, img, frame_id, frame_width, frame_height, detection_id, padding, detection_type, detection_label, confidence):
+def transform(metadata, img, frame_width, frame_height, detection_id, padding, detection_type, detection_label, confidence):
     nparr = np.fromstring(img, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
-    frame_data = metadata[int(frame_id)]
-    if len(frame_data) > 0:
+    if len(metadata) > 0:
         # we have labels
-        for labels in frame_data:
+        for labels in metadata:
             label = labels[detection_type]
             if "BoundingBox" in label:
                 bbox = label['BoundingBox']
                 # Set the padding for all four sides of the bounding box (e.g 10.%)
                 x1, y1 = (int((float(bbox['Left']) * float(frame_width)) * float(padding)), int((float(bbox['Top']) * float(frame_height)) * float(padding)))
                 x2, y2 = (int(x1 + int(float(bbox['Width']) * float(frame_width)) * float(padding)), int(y1 + int(float(bbox['Height']) * float(frame_height)) * float(padding)))
-                if label[detection_label] == detection_id:
+                if label[detection_label] in detection_id:
                     if float(label['Confidence']) > float(confidence):
                         frame[y1:y2, x1:x2] = cv2.GaussianBlur(frame[y1:y2, x1:x2], (41, 41), 30.0, 30.0)
-                        frame = cv2.imencode(".jpg", frame)[1]
-                        return frame
-                    else:
-                        frame = cv2.imencode(".jpg", frame)[1]
-                        return frame
-                else:
-                    frame = cv2.imencode(".jpg", frame)[1]
-                    return frame
-    else:
-        frame = cv2.imencode(".jpg", frame)[1]
-        return frame
+    frame = cv2.imencode(".jpg", frame)[1]
+    return frame
 
 # Lambda function entrypoint:
 def lambda_handler(event, context):
@@ -113,9 +103,9 @@ def lambda_handler(event, context):
         while len(frame_queue) > 0:
             current_frame = frame_queue[0]
             frame_name = current_frame.split('/')[-1]
-            frame_id = frame_name.split('.')[0].split('_')[1]
+            frame_id = frame_name.split('.')[0]
             frame_object = s3.get_object(Bucket=s3bucket, Key=current_frame)["Body"].read()
-            blurred_frame = transform(batch_details["frames_result"], frame_object, frame_id, batch_details['metadata']["frame_width"], batch_details['metadata']["frame_height"], detection_id, padding, detection_type, detection_label, min_confidence)
+            blurred_frame = transform(batch_details["frames_result"][frame_id], frame_object, batch_details['metadata']["frame_width"], batch_details['metadata']["frame_height"], detection_id, padding, detection_type, detection_label, min_confidence)
             frame_key = 'private/assets/%s/output/%s/blur/%s/%s' % (asset_id, workflow_id, detection_type, frame_name)
             s3.put_object(ACL='bucket-owner-full-control', Bucket=s3bucket, Key=frame_key, Body=bytearray(blurred_frame))
             blur_frame_keys.append(frame_key)
