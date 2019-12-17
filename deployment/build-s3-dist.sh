@@ -624,6 +624,61 @@ zip -g dist/start_translate.zip start_translate.py
 cp "./dist/start_translate.zip" "$dist_dir/start_translate.zip"
 
 echo "------------------------------------------------------------------------------"
+echo "Worddist  Operations"
+echo "------------------------------------------------------------------------------"
+
+echo "Building Worddist function"
+cd "$source_dir/operators/nltk" || exit
+
+[ -e dist ] && rm -r dist
+mkdir -p dist
+
+[ -e package ] && rm -r package
+mkdir -p package
+
+echo "create requirements for lambda"
+
+#pipreqs . --force
+
+# Make lambda package
+
+pushd package
+echo "create lambda package"
+
+# Handle distutils install errors
+
+touch ./setup.cfg
+
+echo "[install]" > ./setup.cfg
+echo "prefix= " >> ./setup.cfg
+
+# Try and handle failure if pip version mismatch
+if [ -x "$(command -v pip)" ]; then
+  pip install -r ../requirements.txt --target .
+
+elif [ -x "$(command -v pip3)" ]; then
+  echo "pip not found, trying with pip3"
+  pip3 install -r ../requirements.txt --target .
+
+elif ! [ -x "$(command -v pip)" ] && ! [ -x "$(command -v pip3)" ]; then
+ echo "No version of pip installed. This script requires pip. Cleaning up and exiting."
+ exit 1
+fi
+
+if ! [ -d ../dist/worddist.zip ]; then
+  zip -r9 ../dist/worddist.zip .
+
+elif [ -d ../dist/worddist.zip ]; then
+  echo "Package already present"
+fi
+
+popd
+
+zip -g dist/worddist.zip worddist.py
+
+cp "./dist/worddist.zip" "$dist_dir/worddist.zip"
+
+echo "------------------------------------------------------------------------------"
 echo "Polly  operators"
 echo "------------------------------------------------------------------------------"
 

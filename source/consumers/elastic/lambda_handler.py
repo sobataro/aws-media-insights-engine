@@ -14,7 +14,7 @@ dataplane_bucket = os.environ['DataplaneBucket']
 s3 = boto3.client('s3')
 
 # These names are the lowercase version of OPERATOR_NAME defined in /source/operators/operator-library.yaml
-supported_operators = ["transcribe", "translate", "genericdatalookup", "labeldetection", "celebrityrecognition", "facesearch", "contentmoderation", "facedetection", "key_phrases", "entities", "key_phrases"]
+supported_operators = ["transcribe", "translate", "genericdatalookup", "worddist", "labeldetection", "celebrityrecognition", "facesearch", "contentmoderation", "facedetection", "key_phrases", "entities", "key_phrases"]
 
 
 def normalize_confidence(confidence_value):
@@ -455,6 +455,17 @@ def process_translate(asset, workflow, results):
     es = connect_es(es_endpoint)
     index_document(es, asset, "translation", translation)
 
+def process_worddist(asset, workflow, results):
+    metadata = json.loads(results)
+
+    worddist = metadata["results"]
+
+    for word in worddist:
+        word["workflow"] = workflow
+
+    # worddist["workflow"] = workflow
+    es = connect_es(es_endpoint)
+    index_document(es, asset, "worddist", worddist)
 
 def process_transcribe(asset, workflow, results):
     metadata = json.loads(results)
@@ -714,6 +725,8 @@ def lambda_handler(event, context):
                             process_entities(asset_id, workflow, metadata["Results"])
                         if operator == "key_phrases":
                             process_keyphrases(asset_id, workflow, metadata["Results"])
+                        if operator == "worddist":
+                            process_worddist(asset_id, workflow, metadata["Results"])
                     else:
                         print("We do not store {operator} results".format(operator=operator))
                 else:

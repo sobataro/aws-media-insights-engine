@@ -63,6 +63,34 @@ Resources:
                 Resource: !Ref DataPlaneHandlerArn
                 Effect: "Allow"
 
+  worddistLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "WorddistLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${DataPlaneBucket}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !Ref DataPlaneHandlerArn
+                Effect: "Allow"
+
   mediaConvertS3Role:
     Type: "AWS::IAM::Role"
     Properties:
@@ -486,6 +514,33 @@ Resources:
           OPERATOR_NAME: "GenericDataLookup"
           DataplaneEndpoint: !Ref "DataPlaneEndpoint"
           DataLookupRole: !GetAtt genericDataLookupLambdaRole.Arn
+
+  # nltk
+  startWorddist:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "worddist.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt worddistLambdaRole.Arn
+      Code:
+        S3Bucket: !FindInMap ["SourceCode", "General", "S3Bucket"]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "KeyPrefix"],
+            "worddist.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "Worddist"
+          DataplaneEndpoint: !Ref "DataPlaneEndpoint"
+          WorddistRole: !GetAtt worddistLambdaRole.Arn
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
 
   # Comprehend
 
@@ -1271,6 +1326,17 @@ Resources:
       StartLambdaArn: !GetAtt startGenericDataLookup.Arn
       StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
 
+  WorddistOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !Ref WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Worddist"
+      Type: "Sync"
+      Configuration: { "MediaType": "Text", "Enabled": true }
+      StartLambdaArn: !GetAtt startWorddist.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
   MediaconvertOperation:
     Type: Custom::CustomResource
     Properties:
@@ -1550,6 +1616,11 @@ Outputs:
     Value: !GetAtt GenericDataLookupOperation.Name
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", GenericDataLookup]]
+  WorddistOperation:
+    Description: "Operation name of Worddist"
+    Value: !GetAtt WorddistOperation.Name
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", Worddist]]
   MediaconvertOperation:
     Description: "Operation name of mediaconvert"
     Value: !GetAtt MediaconvertOperation.Name

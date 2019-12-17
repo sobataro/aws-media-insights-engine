@@ -63,6 +63,8 @@ Resources:
             Fn::Sub: "${OperatorLibraryStack}:ComprehendPhrases"
         - Fn::ImportValue:
             Fn::Sub: "${OperatorLibraryStack}:ComprehendEntities"
+        - Fn::ImportValue:
+            Fn::Sub: "${OperatorLibraryStack}:Worddist"
 
   defaultTextSynthesisStage:
     Type: Custom::CustomResource
